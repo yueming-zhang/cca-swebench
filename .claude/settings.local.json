@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:www.google.com)",
+      "Bash(/workspaces/cca-swebench/.venv/bin/pip install:*)",
+      "Bash(.venv/bin/python:*)",
+      "Bash(.venv/bin/pip install:*)",
+      "WebFetch(domain:sapling-scm.com)",
+      "Bash(ls /workspaces/cca-swebench/../../Dockerfile)",
+      "Read(//workspaces/**)"
+    ]
+  }
+}

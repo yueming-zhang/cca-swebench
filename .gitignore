@@ -2,3 +2,16 @@ build/
 __pycache__/
 *.py[cod]
 *.egg-info/
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+env/
+.env
+
+# pytest
+.pytest_cache/
+htmlcov/
+.coverage
+coverage.xml
