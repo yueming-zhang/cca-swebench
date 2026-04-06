@@ -58,3 +58,7 @@ def file_search_cmd(verbose: bool) -> None:
 
 if __name__ == "__main__":
     main()
+
+
+
+# python -m my_agents.cli file-search

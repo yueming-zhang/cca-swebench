@@ -8,7 +8,8 @@
       "Bash(.venv/bin/pip install:*)",
       "WebFetch(domain:sapling-scm.com)",
       "Bash(ls /workspaces/cca-swebench/../../Dockerfile)",
-      "Read(//workspaces/**)"
+      "Read(//workspaces/**)",
+      "Bash(python -c \"from my_agents.tests.integration.test_e2e import *; print\\('imports OK'\\)\")"
     ]
   }
 }

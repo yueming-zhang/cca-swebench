@@ -8,5 +8,4 @@ CLAUDE_SONNET_SEARCH = LLMParams(
     model="claude-sonnet-4-5",
     initial_max_tokens=8192,
     temperature=0.2,
-    top_p=0.7,
 )

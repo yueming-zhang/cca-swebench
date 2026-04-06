@@ -32,7 +32,7 @@ class BedrockLLMManager(LLMManager):
 
     def get_client(self) -> BaseClient:
         if self._client is None:
-            region = os.environ["AWS_REGION"]
+            region = os.environ.get("AWS_REGION", "us-west-2")
             self._client = boto3.client("bedrock-runtime", region_name=region)
         return self._client
 
