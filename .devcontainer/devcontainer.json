@@ -1,0 +1,37 @@
+{
+  "name": "cca-swebench",
+  "build": {
+    "dockerfile": "../../Dockerfile"
+  },
+  "workspaceFolder": "/workspaces/cca-swebench",
+  "mounts": [
+    "source=${localWorkspaceFolder}/../../shared,target=/workspaces/shared,type=bind",
+    "source=${localEnv:HOME}${localEnv:USERPROFILE}/.ssh,target=/home/vscode/.ssh,type=bind,consistency=cached",
+    "source=${localEnv:HOME}${localEnv:USERPROFILE}/.aws,target=/home/vscode/.aws,type=bind,consistency=cached",
+    "source=${localEnv:HOME}${localEnv:USERPROFILE}/.claude,target=/home/vscode/.claude,type=bind,consistency=cached"
+  ],
+  "postCreateCommand": "chmod 700 /home/vscode/.ssh && chmod 600 /home/vscode/.ssh/id_* 2>/dev/null || true && chmod 700 /home/vscode/.aws 2>/dev/null || true",
+  "remoteUser": "vscode",
+  "containerEnv": {
+    "CLAUDE_CODE_USE_BEDROCK": "1",
+    "AWS_REGION": "us-west-2",
+    "AWS_PROFILE": "default",
+    // Pin model to avoid breakage when new versions release
+    "ANTHROPIC_MODEL": "anthropic.claude-opus-4-6-v1",
+    "ANTHROPIC_SMALL_FAST_MODEL": "anthropic.claude-haiku-4-5-20251001-v1:0"
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-python.python",
+        "ms-python.vscode-pylance",
+        "ms-toolsai.jupyter"
+      ],
+      "settings": {
+        "python.defaultInterpreterPath": "/usr/local/bin/python",
+        "terminal.integrated.defaultProfile.linux": "bash",
+        "editor.formatOnSave": true
+      }
+    }
+  }
+}
