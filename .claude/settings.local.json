@@ -14,7 +14,8 @@
       "WebFetch(domain:blog.ezyang.com)",
       "Bash(find:*)",
       "Bash(sl version:*)",
-      "Bash(sl smartlog:*)"
+      "Bash(sl smartlog:*)",
+      "Bash(/workspaces/cca-chat/.venv/bin/python:*)"
     ]
   }
 }
