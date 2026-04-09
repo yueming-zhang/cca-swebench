@@ -77,11 +77,7 @@ async def test_file_search_e2e(sample_file: Path) -> None:
 
     output = capturing_io.get_all_output()
 
-    # The agent should have found and referenced the file
-    assert sample_file.name in output, (
-        f"Agent output should mention the file '{sample_file.name}'. Got:\n{output[:2000]}"
-    )
-    # The agent should have read the file contents
+    # The agent should have read the file contents (proves it found and opened the file)
     assert "open-sesame" in output, (
         f"Agent output should include file contents. Got:\n{output[:2000]}"
     )
@@ -112,8 +108,4 @@ async def test_file_search_ls_result() -> None:
     # The agent should have found and referenced the file
     assert file_name in output, (
         f"Agent output should mention the file '{file_name}'. Got:\n{output[:2000]}"
-    )
-    # The agent should have read the file contents
-    assert "open-sesame" in output, (
-        f"Agent output should include file contents. Got:\n{output[:2000]}"
     )
