@@ -10,7 +10,11 @@
       "Bash(/workspaces/cca-swebench/.venv/bin/python -m pytest my_agents/tests/integration/test_e2e.py::test_file_search_e2e -v -s 2>&1 | tail -100)",
       "Bash(sl diff *)",
       "Bash(sl log *)",
-      "Bash(sl status)"
+      "Bash(sl status)",
+      "WebFetch(domain:blog.ezyang.com)",
+      "Bash(find:*)",
+      "Bash(sl version:*)",
+      "Bash(sl smartlog:*)"
     ]
   }
 }
