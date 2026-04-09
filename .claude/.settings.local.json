@@ -4,7 +4,6 @@
     "AWS_REGION": "us-west-2",
     "AWS_PROFILE": "default",
     "ANTHROPIC_MODEL": "arn:aws:bedrock:us-west-2:980413094772:inference-profile/global.anthropic.claude-opus-4-6-v1",
-    "ANTHROPIC_SMALL_FAST_MODEL": "anthropic.claude-sonnet-4-6",
-    "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"
+    "ANTHROPIC_SMALL_FAST_MODEL": "anthropic.claude-sonnet-4-6"
   }
 }

@@ -11,6 +11,9 @@
     "source=${localEnv:HOME}${localEnv:USERPROFILE}/.claude,target=/home/vscode/.claude,type=bind,consistency=cached"
   ],
   "postCreateCommand": "bash .devcontainer/post-create.sh",
+  "remoteEnv": {
+    "CLAUDE_CODE_DISABLE_AUTO_UPDATE": "1"
+  },
   "remoteUser": "vscode",
   "customizations": {
     "vscode": {

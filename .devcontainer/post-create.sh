@@ -28,6 +28,10 @@ chmod +x eksctl
 sudo mv eksctl /usr/local/bin/
 rm -f eksctl_Linux_${ARCH}.tar.gz
 
+# Install Claude Code
+curl -fsSL https://claude.ai/install.sh | bash
+echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
+
 
 ### 1. Create EKS
 # eksctl create cluster \
