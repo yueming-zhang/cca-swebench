@@ -9,7 +9,8 @@
       "Bash(pip list)",
       "Bash(/workspaces/cca-swebench/.venv/bin/python -m pytest my_agents/tests/integration/test_e2e.py::test_file_search_e2e -v -s 2>&1 | tail -100)",
       "Bash(sl diff *)",
-      "Bash(sl add CLAUDE.md && sl commit -m \"Add CLAUDE.md and fix weak test assertion\n\n- Add CLAUDE.md with project conventions \\(venv, testing, sapling\\)\n- Remove redundant assertion in test_e2e that only checked file name\n  \\(which the agent echoes back regardless of finding the file\\)\n- Keep open-sesame assertion which actually proves file was read\n\nCo-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>\")"
+      "Bash(sl log *)",
+      "Bash(sl status)"
     ]
   }
 }
