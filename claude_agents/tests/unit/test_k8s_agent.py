@@ -346,6 +346,98 @@ class TestRunAgent:
         assert steps[1]["text"] == "No pods found."
         assert "timestamp" in steps[1]
 
+    @patch("claude_agents.k8s.agent.execute_tool")
+    def test_tool_use_loop_step_sequence(self, mock_execute_tool):
+        """Steps follow correct sequence: llm_request, tool_use, tool_result, llm_request, llm_response."""
+        mock_execute_tool.return_value = "NAME  READY\npod1  1/1\n"
+
+        mock_client = MagicMock()
+
+        tool_response = MagicMock()
+        tool_response.stop_reason = "tool_use"
+        tool_response.content = [
+            self._make_tool_use_block(
+                "kubectl",
+                {"subcommand": "get", "args": ["pods"]},
+            )
+        ]
+
+        final_response = MagicMock()
+        final_response.stop_reason = "end_turn"
+        final_response.content = [self._make_text_block("Found pod1")]
+
+        mock_client.messages.create.side_effect = [tool_response, final_response]
+
+        _text, steps = run_agent("list pods", client=mock_client)
+
+        step_types = [s["type"] for s in steps]
+        assert step_types == [
+            "llm_request",
+            "tool_use",
+            "tool_result",
+            "llm_request",
+            "llm_response",
+        ]
+
+    @patch("claude_agents.k8s.agent.execute_tool")
+    def test_llm_request_context_grows(self, mock_execute_tool):
+        """message_count and estimated_tokens grow between successive llm_request steps."""
+        mock_execute_tool.return_value = "pod1"
+
+        mock_client = MagicMock()
+
+        tool_response = MagicMock()
+        tool_response.stop_reason = "tool_use"
+        tool_response.content = [
+            self._make_tool_use_block(
+                "kubectl",
+                {"subcommand": "get", "args": ["pods"]},
+            )
+        ]
+
+        final_response = MagicMock()
+        final_response.stop_reason = "end_turn"
+        final_response.content = [self._make_text_block("done")]
+
+        mock_client.messages.create.side_effect = [tool_response, final_response]
+
+        _text, steps = run_agent("list pods", client=mock_client)
+
+        llm_requests = [s for s in steps if s["type"] == "llm_request"]
+        assert len(llm_requests) == 2
+        assert llm_requests[1]["message_count"] > llm_requests[0]["message_count"]
+        assert llm_requests[1]["estimated_tokens"] >= llm_requests[0]["estimated_tokens"]
+
+    @patch("claude_agents.k8s.agent.execute_tool")
+    def test_tool_error_step_recorded(self, mock_execute_tool):
+        """tool_error step is recorded when execute_tool raises."""
+        mock_execute_tool.side_effect = ValueError("Blocked subcommand: 'delete' is not allowed")
+
+        mock_client = MagicMock()
+
+        tool_response = MagicMock()
+        tool_response.stop_reason = "tool_use"
+        tool_response.content = [
+            self._make_tool_use_block(
+                "kubectl",
+                {"subcommand": "delete", "args": ["pod", "x"]},
+            )
+        ]
+
+        final_response = MagicMock()
+        final_response.stop_reason = "end_turn"
+        final_response.content = [self._make_text_block("Cannot delete.")]
+
+        mock_client.messages.create.side_effect = [tool_response, final_response]
+
+        _text, steps = run_agent("delete pod x", client=mock_client)
+
+        error_steps = [s for s in steps if s["type"] == "tool_error"]
+        assert len(error_steps) == 1
+        assert error_steps[0]["subcommand"] == "delete"
+        assert error_steps[0]["args"] == ["pod", "x"]
+        assert "Blocked subcommand" in error_steps[0]["error"]
+
 
 # ---------------------------------------------------------------------------
 # _estimate_tokens
