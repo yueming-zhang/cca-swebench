@@ -236,3 +236,28 @@ def test_count_history_tokens():
         model=DEFAULT_MODEL_ID,
         messages=agent.history,
     )
+
+
+def test_summarize_messages():
+    """_summarize_messages should call Claude to produce a summary string."""
+    agent, mock_client = _make_agent_with_mock()
+
+    mock_response = MagicMock()
+    mock_text_block = MagicMock()
+    mock_text_block.text = "User discussed Python testing. Agent provided examples."
+    mock_response.content = [mock_text_block]
+    mock_client.messages.create.return_value = mock_response
+
+    messages = [
+        {"role": "user", "content": "Tell me about Python testing"},
+        {"role": "assistant", "content": "Here are some examples of pytest..."},
+    ]
+    result = agent._summarize_messages(messages)
+
+    assert result == "User discussed Python testing. Agent provided examples."
+    mock_client.messages.create.assert_called_once()
+    call_kwargs = mock_client.messages.create.call_args.kwargs
+    assert call_kwargs["model"] == DEFAULT_MODEL_ID
+    assert call_kwargs["max_tokens"] == 1024
+    assert any("summarize" in s.lower() for s in [call_kwargs["system"]])
+    assert call_kwargs["messages"][0]["role"] == "user"

@@ -5,6 +5,11 @@ from anthropic import AnthropicBedrock
 DEFAULT_MODEL_ID = "us.anthropic.claude-opus-4-6-v1"
 DEFAULT_MAX_TOKENS = 4096
 
+SUMMARY_SYSTEM_PROMPT = (
+    "Summarize the following conversation concisely, preserving key facts, "
+    "decisions, user preferences, and important context. Be thorough but brief."
+)
+
 
 class ChatAgent:
     def __init__(
@@ -50,6 +55,19 @@ class ChatAgent:
             messages=self.history,
         )
         return result.input_tokens
+
+    def _summarize_messages(self, messages: list[dict]) -> str:
+        """Summarize a list of messages into a concise text."""
+        conversation_text = "\n".join(
+            f"{m['role'].upper()}: {m['content']}" for m in messages
+        )
+        response = self._client.messages.create(
+            model=self.model_id,
+            max_tokens=1024,
+            system=SUMMARY_SYSTEM_PROMPT,
+            messages=[{"role": "user", "content": conversation_text}],
+        )
+        return response.content[0].text
 
     def reset(self):
         self.history.clear()
