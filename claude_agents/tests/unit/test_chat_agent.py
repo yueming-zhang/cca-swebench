@@ -218,3 +218,21 @@ def test_custom_memory_config():
     assert agent.max_context_tokens == 100_000
     assert agent.summary_threshold == 0.8
     assert agent.recent_messages_to_keep == 10
+
+
+def test_count_history_tokens():
+    """_count_history_tokens should call client.messages.count_tokens and return the count."""
+    agent, mock_client = _make_agent_with_mock()
+    mock_client.messages.count_tokens.return_value = MagicMock(input_tokens=500)
+
+    agent.history = [
+        {"role": "user", "content": "hello"},
+        {"role": "assistant", "content": "hi there"},
+    ]
+    result = agent._count_history_tokens()
+
+    assert result == 500
+    mock_client.messages.count_tokens.assert_called_once_with(
+        model=DEFAULT_MODEL_ID,
+        messages=agent.history,
+    )

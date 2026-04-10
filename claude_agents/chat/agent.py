@@ -43,5 +43,13 @@ class ChatAgent:
         self.history.append({"role": "assistant", "content": full_text})
         return full_text
 
+    def _count_history_tokens(self) -> int:
+        """Count tokens in current history via the API."""
+        result = self._client.messages.count_tokens(
+            model=self.model_id,
+            messages=self.history,
+        )
+        return result.input_tokens
+
     def reset(self):
         self.history.clear()
