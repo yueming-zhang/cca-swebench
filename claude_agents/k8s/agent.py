@@ -99,10 +99,7 @@ def _estimate_tokens(messages: list[dict]) -> int:
             total_chars += len(content)
         elif isinstance(content, list):
             for block in content:
-                if isinstance(block, dict):
-                    total_chars += len(str(block))
-                else:
-                    total_chars += len(str(block))
+                total_chars += len(str(block))
     return total_chars // 4
 
 
