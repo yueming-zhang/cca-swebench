@@ -1,6 +1,6 @@
 {
     "python.testing.pytestArgs": [
-        "my_agents"
+        "claude_agents"
     ],
     "python.testing.unittestEnabled": false,
     "python.testing.pytestEnabled": true

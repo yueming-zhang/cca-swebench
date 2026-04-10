@@ -7,12 +7,12 @@ No branches — just commits, the Sapling way.
 
 ```bash
 # From the main repo (e.g., /workspaces/cca-swebench)
-sudo git worktree add --detach ../<worktree-name> main
+sudo git worktree add --detach ../<worktree-name>
 ```
 
 Example:
 ```bash
-sudo git worktree add --detach ../cca-chat main
+sudo git worktree add --detach ../cca-chat
 ```
 
 This creates `/workspaces/cca-chat` at a detached HEAD pointing to `main`. No branch created.
