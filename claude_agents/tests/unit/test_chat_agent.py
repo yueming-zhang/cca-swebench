@@ -155,6 +155,38 @@ def test_chat_passes_model_params():
     )
 
 
+def test_three_turn_conversation_saves_memory():
+    """Three chat() calls should save all 6 messages and pass full history to API."""
+    agent, mock_client = _make_agent_with_mock(["reply1"])
+
+    agent.chat("turn1")
+
+    mock_client.messages.stream.return_value = FakeStreamContext(["reply2"])
+    agent.chat("turn2")
+
+    mock_client.messages.stream.return_value = FakeStreamContext(["reply3"])
+    agent.chat("turn3")
+
+    # All 6 messages (3 user + 3 assistant) are saved in order
+    assert len(agent.history) == 6
+    assert agent.history[0] == {"role": "user", "content": "turn1"}
+    assert agent.history[1] == {"role": "assistant", "content": "reply1"}
+    assert agent.history[2] == {"role": "user", "content": "turn2"}
+    assert agent.history[3] == {"role": "assistant", "content": "reply2"}
+    assert agent.history[4] == {"role": "user", "content": "turn3"}
+    assert agent.history[5] == {"role": "assistant", "content": "reply3"}
+
+    # Third API call received the full 5-message history (turn1, reply1, turn2, reply2, turn3)
+    third_call = mock_client.messages.stream.call_args_list[2]
+    messages = third_call.kwargs["messages"]
+    assert len(messages) == 5
+    assert messages[0] == {"role": "user", "content": "turn1"}
+    assert messages[1] == {"role": "assistant", "content": "reply1"}
+    assert messages[2] == {"role": "user", "content": "turn2"}
+    assert messages[3] == {"role": "assistant", "content": "reply2"}
+    assert messages[4] == {"role": "user", "content": "turn3"}
+
+
 def test_reset_clears_history():
     """reset() should clear conversation history."""
     agent, _ = _make_agent_with_mock(["reply"])
