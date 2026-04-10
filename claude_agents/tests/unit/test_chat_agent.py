@@ -195,3 +195,26 @@ def test_reset_clears_history():
 
     agent.reset()
     assert agent.history == []
+
+
+def test_default_memory_config():
+    """ChatAgent should use sensible defaults for memory parameters."""
+    with patch("claude_agents.chat.agent.AnthropicBedrock"):
+        agent = ChatAgent()
+    assert agent.max_context_tokens == 200_000
+    assert agent.summary_threshold == 0.5
+    assert agent.recent_messages_to_keep == 20
+
+
+def test_custom_memory_config():
+    """ChatAgent should accept custom memory parameters."""
+    mock_client = MagicMock()
+    agent = ChatAgent(
+        max_context_tokens=100_000,
+        summary_threshold=0.8,
+        recent_messages_to_keep=10,
+        client=mock_client,
+    )
+    assert agent.max_context_tokens == 100_000
+    assert agent.summary_threshold == 0.8
+    assert agent.recent_messages_to_keep == 10

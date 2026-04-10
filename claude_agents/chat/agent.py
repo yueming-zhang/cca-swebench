@@ -12,11 +12,17 @@ class ChatAgent:
         model_id: str = DEFAULT_MODEL_ID,
         aws_region: str | None = None,
         max_tokens: int = DEFAULT_MAX_TOKENS,
+        max_context_tokens: int = 200_000,
+        summary_threshold: float = 0.5,
+        recent_messages_to_keep: int = 20,
         client: AnthropicBedrock | None = None,
     ):
         self.model_id = model_id
         self.aws_region = aws_region or os.environ.get("AWS_REGION", "us-west-2")
         self.max_tokens = max_tokens
+        self.max_context_tokens = max_context_tokens
+        self.summary_threshold = summary_threshold
+        self.recent_messages_to_keep = recent_messages_to_keep
         self.history: list[dict] = []
         self._client = client or AnthropicBedrock(aws_region=self.aws_region)
 
