@@ -15,7 +15,8 @@
       "Bash(find:*)",
       "Bash(sl version:*)",
       "Bash(sl smartlog:*)",
-      "Bash(/workspaces/cca-chat/.venv/bin/python:*)"
+      "Bash(/workspaces/cca-chat/.venv/bin/python:*)",
+      "Bash(python3 -m pytest my_agents/tests/unit/test_k8s_agent.py -v)"
     ]
   }
 }
