@@ -113,12 +113,24 @@ def create_client() -> AnthropicBedrock:
     )
 
 
-def run_agent(user_message: str, client: AnthropicBedrock | None = None) -> str:
-    """Run the K8s agent with a single user message. Returns the final text."""
+def run_agent(user_message: str, client: AnthropicBedrock | None = None) -> tuple[str, list[dict]]:
+    """Run the K8s agent with a single user message.
+
+    Returns a tuple of (final_text, steps) where steps is a list of dicts
+    tracking each event in the agent loop for evaluation.
+    """
     if client is None:
         client = create_client()
 
     messages = [{"role": "user", "content": user_message}]
+    steps: list[dict] = []
+
+    steps.append({
+        "type": "llm_request",
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "message_count": len(messages),
+        "estimated_tokens": _estimate_tokens(messages),
+    })
 
     response = client.messages.create(
         model=MODEL_ID,
@@ -132,10 +144,35 @@ def run_agent(user_message: str, client: AnthropicBedrock | None = None) -> str:
         tool_results = []
         for block in response.content:
             if block.type == "tool_use":
+                subcommand = block.input.get("subcommand", "")
+                args = block.input.get("args", [])
+
+                steps.append({
+                    "type": "tool_use",
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "subcommand": subcommand,
+                    "args": args,
+                })
+
                 try:
                     result = execute_tool(block.name, block.input)
+                    steps.append({
+                        "type": "tool_result",
+                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                        "subcommand": subcommand,
+                        "args": args,
+                        "output": result,
+                    })
                 except (ValueError, subprocess.TimeoutExpired) as e:
                     result = f"Error: {e}"
+                    steps.append({
+                        "type": "tool_error",
+                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                        "subcommand": subcommand,
+                        "args": args,
+                        "error": str(e),
+                    })
+
                 tool_results.append(
                     {
                         "type": "tool_result",
@@ -147,6 +184,13 @@ def run_agent(user_message: str, client: AnthropicBedrock | None = None) -> str:
         messages.append({"role": "assistant", "content": response.content})
         messages.append({"role": "user", "content": tool_results})
 
+        steps.append({
+            "type": "llm_request",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "message_count": len(messages),
+            "estimated_tokens": _estimate_tokens(messages),
+        })
+
         response = client.messages.create(
             model=MODEL_ID,
             max_tokens=4096,
@@ -155,9 +199,17 @@ def run_agent(user_message: str, client: AnthropicBedrock | None = None) -> str:
             messages=messages,
         )
 
-    return "\n".join(
+    final_text = "\n".join(
         block.text for block in response.content if hasattr(block, "text")
     )
+
+    steps.append({
+        "type": "llm_response",
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "text": final_text,
+    })
+
+    return final_text, steps
 
 
 def main() -> None:

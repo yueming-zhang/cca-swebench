@@ -327,6 +327,25 @@ class TestRunAgent:
         assert call_kwargs.kwargs["tools"] is not None
         assert len(call_kwargs.kwargs["tools"]) == 1
 
+    def test_simple_response_returns_steps(self):
+        """run_agent returns (text, steps) tuple with llm_request and llm_response."""
+        mock_client = MagicMock()
+        mock_response = MagicMock()
+        mock_response.stop_reason = "end_turn"
+        mock_response.content = [self._make_text_block("No pods found.")]
+        mock_client.messages.create.return_value = mock_response
+
+        text, steps = run_agent("list pods", client=mock_client)
+        assert text == "No pods found."
+        assert len(steps) == 2
+        assert steps[0]["type"] == "llm_request"
+        assert steps[0]["message_count"] == 1
+        assert "estimated_tokens" in steps[0]
+        assert "timestamp" in steps[0]
+        assert steps[1]["type"] == "llm_response"
+        assert steps[1]["text"] == "No pods found."
+        assert "timestamp" in steps[1]
+
 
 # ---------------------------------------------------------------------------
 # _estimate_tokens
