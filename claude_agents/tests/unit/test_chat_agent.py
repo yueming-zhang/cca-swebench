@@ -342,6 +342,30 @@ def test_compact_history_skips_when_under_threshold():
     mock_client.messages.create.assert_not_called()
 
 
+def test_chat_calls_compact_before_api_call():
+    """chat() should call _maybe_compact_history before streaming."""
+    agent, mock_client = _make_agent_with_mock(["response"])
+
+    call_order = []
+    original_compact = agent._maybe_compact_history
+
+    def tracking_compact():
+        call_order.append("compact")
+        original_compact()
+
+    def tracking_stream(**kwargs):
+        call_order.append("stream")
+        return FakeStreamContext(["response"])
+
+    agent._maybe_compact_history = tracking_compact
+    mock_client.messages.stream.side_effect = tracking_stream
+    mock_client.messages.count_tokens.return_value = MagicMock(input_tokens=100)
+
+    agent.chat("hello")
+
+    assert call_order == ["compact", "stream"]
+
+
 def test_compact_history_skips_when_too_few_messages():
     """_maybe_compact_history should not compact when history <= recent_messages_to_keep."""
     mock_client = MagicMock()

@@ -34,6 +34,8 @@ class ChatAgent:
     def chat(self, user_message: str) -> str:
         self.history.append({"role": "user", "content": user_message})
 
+        self._maybe_compact_history()
+
         full_text = ""
         with self._client.messages.stream(
             model=self.model_id,
