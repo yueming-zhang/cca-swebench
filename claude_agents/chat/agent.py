@@ -51,12 +51,13 @@ class ChatAgent:
         return full_text
 
     def _count_history_tokens(self) -> int:
-        """Count tokens in current history via the API."""
-        result = self._client.messages.count_tokens(
-            model=self.model_id,
-            messages=self.history,
-        )
-        return result.input_tokens
+        """Estimate token count in current history.
+
+        Uses a ~4 characters per token heuristic since the token counting
+        API is not available on Bedrock.
+        """
+        total_chars = sum(len(m["content"]) for m in self.history)
+        return total_chars // 4
 
     def _summarize_messages(self, messages: list[dict]) -> str:
         """Summarize a list of messages into a concise text."""

@@ -39,7 +39,7 @@ class TestK8sAgentIntegration:
         )
         assert len(result) > 0
 
-    def test_tool_definitions_match_whitelist(self):
-        """Verify only the 3 whitelisted tools are defined."""
-        tool_names = {t["name"] for t in TOOLS}
-        assert tool_names == {"kubectl_get", "kubectl_describe", "kubectl_logs"}
+    def test_tool_definitions_single_kubectl(self):
+        """Verify exactly one generic kubectl tool is defined."""
+        assert len(TOOLS) == 1
+        assert TOOLS[0]["name"] == "kubectl"

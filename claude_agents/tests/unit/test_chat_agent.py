@@ -221,21 +221,17 @@ def test_custom_memory_config():
 
 
 def test_count_history_tokens():
-    """_count_history_tokens should call client.messages.count_tokens and return the count."""
-    agent, mock_client = _make_agent_with_mock()
-    mock_client.messages.count_tokens.return_value = MagicMock(input_tokens=500)
+    """_count_history_tokens should estimate tokens from character count."""
+    agent, _ = _make_agent_with_mock()
 
     agent.history = [
-        {"role": "user", "content": "hello"},
-        {"role": "assistant", "content": "hi there"},
+        {"role": "user", "content": "hello"},           # 5 chars
+        {"role": "assistant", "content": "hi there"},    # 8 chars
     ]
     result = agent._count_history_tokens()
 
-    assert result == 500
-    mock_client.messages.count_tokens.assert_called_once_with(
-        model=DEFAULT_MODEL_ID,
-        messages=agent.history,
-    )
+    # 13 chars // 4 = 3
+    assert result == 3
 
 
 def test_summarize_messages():
@@ -274,18 +270,18 @@ def test_compact_history_triggers_when_over_threshold():
         client=mock_client,
     )
 
+    # Need total_chars // 4 > 500 (threshold = 50% of 1000), so total_chars > 2000
+    long_text = "x" * 400
     # Build history with 6 messages (3 turns) — more than recent_messages_to_keep (4)
     agent.history = [
-        {"role": "user", "content": "msg1"},
-        {"role": "assistant", "content": "reply1"},
-        {"role": "user", "content": "msg2"},
-        {"role": "assistant", "content": "reply2"},
-        {"role": "user", "content": "msg3"},
-        {"role": "assistant", "content": "reply3"},
+        {"role": "user", "content": long_text},
+        {"role": "assistant", "content": long_text},
+        {"role": "user", "content": long_text},
+        {"role": "assistant", "content": long_text},
+        {"role": "user", "content": long_text},
+        {"role": "assistant", "content": long_text},
     ]
-
-    # Token count above 50% of 1000
-    mock_client.messages.count_tokens.return_value = MagicMock(input_tokens=600)
+    # 6 * 400 = 2400 chars, // 4 = 600 estimated tokens > 500 threshold
 
     # Summarization returns a summary
     mock_response = MagicMock()
@@ -296,8 +292,8 @@ def test_compact_history_triggers_when_over_threshold():
 
     agent._maybe_compact_history()
 
-    # History should now be: summary_user, summary_assistant, msg2, reply2, msg3, reply3
-    # Old messages (msg1, reply1) were summarized; last 4 messages kept verbatim
+    # History should now be: summary_user, summary_assistant, + last 4 messages
+    # Old messages (first 2) were summarized; last 4 messages kept verbatim
     assert len(agent.history) == 6
     assert "[Conversation summary]" in agent.history[0]["content"]
     assert "Summary of earlier conversation." in agent.history[0]["content"]
@@ -305,10 +301,10 @@ def test_compact_history_triggers_when_over_threshold():
     assert agent.history[1]["role"] == "assistant"
     assert agent.history[1]["content"] == "Understood, I'll keep this context in mind."
     # Last 4 messages preserved
-    assert agent.history[2] == {"role": "user", "content": "msg2"}
-    assert agent.history[3] == {"role": "assistant", "content": "reply2"}
-    assert agent.history[4] == {"role": "user", "content": "msg3"}
-    assert agent.history[5] == {"role": "assistant", "content": "reply3"}
+    assert agent.history[2] == {"role": "user", "content": long_text}
+    assert agent.history[3] == {"role": "assistant", "content": long_text}
+    assert agent.history[4] == {"role": "user", "content": long_text}
+    assert agent.history[5] == {"role": "assistant", "content": long_text}
 
 
 def test_compact_history_skips_when_under_threshold():
@@ -322,6 +318,7 @@ def test_compact_history_skips_when_under_threshold():
         client=mock_client,
     )
 
+    # Short messages: 6 * ~5 chars = ~30 chars, // 4 = 7 estimated tokens < 500
     agent.history = [
         {"role": "user", "content": "msg1"},
         {"role": "assistant", "content": "reply1"},
@@ -330,9 +327,6 @@ def test_compact_history_skips_when_under_threshold():
         {"role": "user", "content": "msg3"},
         {"role": "assistant", "content": "reply3"},
     ]
-
-    # Token count below 50% of 1000
-    mock_client.messages.count_tokens.return_value = MagicMock(input_tokens=400)
 
     agent._maybe_compact_history()
 
@@ -359,7 +353,6 @@ def test_chat_calls_compact_before_api_call():
 
     agent._maybe_compact_history = tracking_compact
     mock_client.messages.stream.side_effect = tracking_stream
-    mock_client.messages.count_tokens.return_value = MagicMock(input_tokens=100)
 
     agent.chat("hello")
 
@@ -384,9 +377,6 @@ def test_compact_history_skips_when_too_few_messages():
         {"role": "user", "content": "msg2"},
         {"role": "assistant", "content": "reply2"},
     ]
-
-    # Even with high token count, should not compact
-    mock_client.messages.count_tokens.return_value = MagicMock(input_tokens=600)
 
     agent._maybe_compact_history()
 

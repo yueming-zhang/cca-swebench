@@ -21,7 +21,9 @@
       "Bash(getent hosts:*)",
       "Read(//etc/**)",
       "Bash(ping -c1 -W1 host.docker.internal)",
-      "Bash(curl:*)"
+      "Bash(curl:*)",
+      "Bash(xargs ls:*)",
+      "Skill(claude-api)"
     ]
   }
 }

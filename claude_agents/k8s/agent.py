@@ -1,7 +1,8 @@
-"""K8s readonly agent using AnthropicBedrock.
+"""K8s agent using AnthropicBedrock.
 
-Provides 3 whitelisted kubectl tools (get, describe, logs) with input
-validation against shell metacharacters. Uses a manual agentic loop.
+Provides a generic kubectl tool that supports any subcommand, with a
+blocklist for destructive operations and input validation against shell
+metacharacters. Uses a manual agentic loop.
 """
 
 import os
@@ -14,12 +15,15 @@ from anthropic import AnthropicBedrock
 MODEL_ID = "us.anthropic.claude-sonnet-4-5-20250929-v1:0"
 
 SYSTEM_PROMPT = (
-    "You are a Kubernetes assistant. Use the provided kubectl tools to answer "
-    "questions. Only use the tools provided — do not suggest running other commands."
+    "You are a Kubernetes assistant. Use the kubectl tool to answer "
+    "questions. You can use any kubectl subcommand except delete. "
+    "Pass arguments as an array of strings."
 )
 
 # Reject shell metacharacters: ; | && ` $()
 DANGEROUS_PATTERN = re.compile(r"[;|`]|\$\(|&&")
+
+BLOCKED_SUBCOMMANDS = frozenset({"delete"})
 
 
 def validate_input(value: str) -> None:
@@ -30,101 +34,55 @@ def validate_input(value: str) -> None:
 
 TOOLS = [
     {
-        "name": "kubectl_get",
-        "description": "Run 'kubectl get <resource>' to list Kubernetes resources.",
+        "name": "kubectl",
+        "description": (
+            "Run a kubectl command. Specify a subcommand (e.g. 'get', 'describe', "
+            "'logs', 'top', 'exec', 'apply') and any arguments. "
+            "The 'delete' subcommand is blocked."
+        ),
         "input_schema": {
             "type": "object",
             "properties": {
-                "resource": {
+                "subcommand": {
                     "type": "string",
-                    "description": "Resource type, e.g. pods, services, deployments, nodes",
+                    "description": (
+                        "The kubectl subcommand, e.g. 'get', 'describe', "
+                        "'logs', 'top'."
+                    ),
                 },
-                "namespace": {
-                    "type": "string",
-                    "description": "Kubernetes namespace (omit for 'default')",
+                "args": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": (
+                        "Arguments after the subcommand, e.g. "
+                        "['pods', '-n', 'kube-system']."
+                    ),
                 },
             },
-            "required": ["resource"],
-        },
-    },
-    {
-        "name": "kubectl_describe",
-        "description": "Run 'kubectl describe <resource> <name>' to show detailed info about a specific resource.",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "resource": {
-                    "type": "string",
-                    "description": "Resource type, e.g. pod, service, deployment",
-                },
-                "name": {
-                    "type": "string",
-                    "description": "Name of the resource",
-                },
-                "namespace": {
-                    "type": "string",
-                    "description": "Kubernetes namespace (omit for 'default')",
-                },
-            },
-            "required": ["resource", "name"],
-        },
-    },
-    {
-        "name": "kubectl_logs",
-        "description": "Run 'kubectl logs <pod>' to view container logs.",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "pod": {
-                    "type": "string",
-                    "description": "Pod name",
-                },
-                "namespace": {
-                    "type": "string",
-                    "description": "Kubernetes namespace (omit for 'default')",
-                },
-                "tail": {
-                    "type": "integer",
-                    "description": "Number of recent log lines to show (default: 100)",
-                },
-            },
-            "required": ["pod"],
+            "required": ["subcommand"],
         },
     },
 ]
 
 
 def execute_tool(tool_name: str, tool_input: dict) -> str:
-    """Execute a whitelisted kubectl command and return its output."""
-    if tool_name == "kubectl_get":
-        resource = tool_input["resource"]
-        namespace = tool_input.get("namespace", "default")
-        validate_input(resource)
-        validate_input(namespace)
-        cmd = ["kubectl", "get", resource, "-n", namespace]
-
-    elif tool_name == "kubectl_describe":
-        resource = tool_input["resource"]
-        name = tool_input["name"]
-        namespace = tool_input.get("namespace", "default")
-        validate_input(resource)
-        validate_input(name)
-        validate_input(namespace)
-        cmd = ["kubectl", "describe", resource, name, "-n", namespace]
-
-    elif tool_name == "kubectl_logs":
-        pod = tool_input["pod"]
-        namespace = tool_input.get("namespace", "default")
-        tail = tool_input.get("tail", 100)
-        validate_input(pod)
-        validate_input(namespace)
-        if not isinstance(tail, int) or tail < 0:
-            raise ValueError(f"Invalid tail value: {tail}")
-        cmd = ["kubectl", "logs", pod, "-n", namespace, "--tail", str(tail)]
-
-    else:
+    """Execute a kubectl command and return its output."""
+    if tool_name != "kubectl":
         raise ValueError(f"Unknown tool: {tool_name}")
 
+    subcommand = tool_input["subcommand"]
+    args = tool_input.get("args", [])
+
+    validate_input(subcommand)
+    if subcommand in BLOCKED_SUBCOMMANDS:
+        raise ValueError(f"Blocked subcommand: {subcommand!r} is not allowed")
+
+    for arg in args:
+        if not isinstance(arg, str):
+            raise ValueError(f"Invalid arg: expected string, got {type(arg).__name__}")
+        validate_input(arg)
+
+    cmd = ["kubectl", subcommand, *args]
     result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
     if result.returncode != 0:
         return f"Error: {result.stderr.strip()}"
