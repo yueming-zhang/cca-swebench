@@ -11,6 +11,7 @@ from claude_agents.k8s.agent import (
     BLOCKED_SUBCOMMANDS,
     DANGEROUS_PATTERN,
     TOOLS,
+    _estimate_tokens,
     execute_tool,
     run_agent,
     validate_input,
@@ -325,3 +326,26 @@ class TestRunAgent:
         assert call_kwargs.kwargs["system"] is not None
         assert call_kwargs.kwargs["tools"] is not None
         assert len(call_kwargs.kwargs["tools"]) == 1
+
+
+# ---------------------------------------------------------------------------
+# _estimate_tokens
+# ---------------------------------------------------------------------------
+
+
+class TestEstimateTokens:
+    def test_empty_messages(self):
+        assert _estimate_tokens([]) == 0
+
+    def test_simple_messages(self):
+        messages = [
+            {"role": "user", "content": "hello world"},  # 11 chars -> 2 tokens
+        ]
+        assert _estimate_tokens(messages) == 11 // 4
+
+    def test_multiple_messages(self):
+        messages = [
+            {"role": "user", "content": "a" * 100},
+            {"role": "assistant", "content": "b" * 200},
+        ]
+        assert _estimate_tokens(messages) == 300 // 4

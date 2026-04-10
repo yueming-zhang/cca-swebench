@@ -9,6 +9,7 @@ import os
 import re
 import subprocess
 import sys
+from datetime import datetime, timezone
 
 from anthropic import AnthropicBedrock
 
@@ -87,6 +88,22 @@ def execute_tool(tool_name: str, tool_input: dict) -> str:
     if result.returncode != 0:
         return f"Error: {result.stderr.strip()}"
     return result.stdout
+
+
+def _estimate_tokens(messages: list[dict]) -> int:
+    """Estimate token count using ~4 chars per token heuristic."""
+    total_chars = 0
+    for m in messages:
+        content = m.get("content", "")
+        if isinstance(content, str):
+            total_chars += len(content)
+        elif isinstance(content, list):
+            for block in content:
+                if isinstance(block, dict):
+                    total_chars += len(str(block))
+                else:
+                    total_chars += len(str(block))
+    return total_chars // 4
 
 
 def create_client() -> AnthropicBedrock:
