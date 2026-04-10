@@ -218,7 +218,7 @@ class TestRunAgent:
         mock_response.content = [self._make_text_block("No pods found.")]
         mock_client.messages.create.return_value = mock_response
 
-        result = run_agent("list pods", client=mock_client)
+        result, _steps = run_agent("list pods", client=mock_client)
         assert result == "No pods found."
         mock_client.messages.create.assert_called_once()
 
@@ -246,7 +246,7 @@ class TestRunAgent:
 
         mock_client.messages.create.side_effect = [tool_response, final_response]
 
-        result = run_agent("list pods", client=mock_client)
+        result, _steps = run_agent("list pods", client=mock_client)
         assert result == "Found 1 pod: pod1"
         assert mock_client.messages.create.call_count == 2
         mock_execute_tool.assert_called_once_with(
@@ -276,7 +276,7 @@ class TestRunAgent:
 
         mock_client.messages.create.side_effect = [tool_response, final_response]
 
-        result = run_agent("get bad;input", client=mock_client)
+        result, _steps = run_agent("get bad;input", client=mock_client)
         assert "couldn't" in result
         assert mock_client.messages.create.call_count == 2
 
@@ -308,7 +308,7 @@ class TestRunAgent:
 
         mock_client.messages.create.side_effect = [tool_response, final_response]
 
-        result = run_agent("show everything", client=mock_client)
+        result, _steps = run_agent("show everything", client=mock_client)
         assert result == "Found pods and services."
         assert mock_execute_tool.call_count == 2
 

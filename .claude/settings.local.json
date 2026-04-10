@@ -24,7 +24,8 @@
       "Bash(curl:*)",
       "Bash(xargs ls:*)",
       "Skill(claude-api)",
-      "Bash(sl commit:*)"
+      "Bash(sl commit:*)",
+      "Bash(.venv/bin/python:*)"
     ]
   }
 }
