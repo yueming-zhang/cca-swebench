@@ -2,18 +2,50 @@
 
 ## Context
 
-You want to build two independent agents using the Claude API (via AWS Bedrock) and develop them in parallel using Sapling worktrees, following the pattern from [ezyang's blog post](https://blog.ezyang.com/2026/03/parallel-agents-heart-sapling/). The existing codebase uses boto3 for Bedrock — the `anthropic` package is not installed. We'll use `anthropic[bedrock]` which provides `AnthropicBedrock` client for a cleaner SDK experience with tool use.
+Build two independent agents using the Claude API (via AWS Bedrock) in parallel,
+following [ezyang's parallel agents workflow](https://blog.ezyang.com/2026/03/parallel-agents-heart-sapling/)
+and [AI-assisted programming post](https://blog.ezyang.com/2026/03/ai-assisted-programming-for-spmd-types/).
+
+### Key ideas from the blog posts
+
+- **One terminal per worktree**, each running a Claude Code session
+- **Sapling stack** (linear chain of draft commits) as the source of truth
+- **`sl follow`** — after a parent commit is amended, follow the successor chain
+- **`sl adopt`** — after inserting a commit in the middle, rebase children onto it
+- **Review every line** the LLM produces; don't multitask during review
+
+### Limitation: `sl wt` requires EdenFS (Meta-internal)
+
+The blog post uses `sl wt add` for worktrees, which requires EdenFS — not available
+in open-source Sapling. We use **`git worktree`** instead (the repo is git-backed).
+`sl` commands (`sl smartlog`, `sl follow`, `sl adopt`, `sl amend`) work in git
+worktrees since Sapling reads the same git objects.
+
+### Gotcha: `.sl/config` aliases not loaded in git-backed repos
+
+The `follow` and `adopt` aliases must be in the **global** Sapling user config.
+`.sl/config` in a git-backed repo is not read.
+
+```bash
+mkdir -p ~/.config/sapling
+cat > ~/.config/sapling/sapling.conf << 'EOF'
+[alias]
+follow = goto last(successors(.))
+adopt = rebase -s 'children(parents(.)) - .' -d .
+EOF
+
+# Verify
+sl adopt --help    # should show "alias for: rebase ..."
+```
 
 ---
 
-## Step 0: Sapling Stack Setup
-
-Create a linear stack of 3 draft commits, then open worktrees at each position:
+## Step 0: Create the Sapling Stack
 
 ```bash
-# From the repo root (main @ 8f0336f)
+# From the repo root (/workspaces/cca-swebench)
 
-# 1. Create the base commit (shared scaffolding)
+# 1. Create the base commit (shared scaffolding + dependency)
 mkdir -p claude_agents/chat claude_agents/k8s
 touch claude_agents/__init__.py claude_agents/chat/__init__.py claude_agents/k8s/__init__.py
 sl add claude_agents/
@@ -29,162 +61,184 @@ echo "# k8s agent WIP" > claude_agents/k8s/agent.py
 sl add claude_agents/k8s/agent.py
 sl commit -m "[k8s] WIP k8s agent"
 
-# 4. Open worktrees at each commit
-sl worktree add ../cca-chat -r .~1    # points at the [chat] commit
-sl worktree add ../cca-k8s  -r .      # points at the [k8s] commit (top of stack)
+# 4. Verify the stack
+sl smartlog
 ```
 
-Now you have 3 workspaces:
-- `/workspaces/cca-swebench` — main repo (bottom of stack)
-- `/workspaces/cca-chat` — worktree for chat agent development
-- `/workspaces/cca-k8s` — worktree for k8s agent development
+## Step 1: Create Worktrees
 
-### Sapling Parallel Workflow Commands
-
-| Command | Purpose |
-|---------|---------|
-| `sl follow` | After amending a parent commit, run in child worktree to rebase onto updated parent |
-| `sl adopt` | After inserting a new commit in the middle, adopt existing children onto it |
-| `sl smartlog` | See the full stack and which worktree is where |
-
----
-
-## Step 1: Install `anthropic` with Bedrock support
-
-In the main repo:
 ```bash
-.venv/bin/pip install "anthropic[bedrock]"
+# git worktree (since sl wt requires EdenFS)
+git worktree add ../cca-chat HEAD~1    # at the [chat] commit
+git worktree add ../cca-k8s  HEAD      # at the [k8s] commit
 ```
 
-Add `anthropic[bedrock]` to `requirements.txt`.
+| Workspace | Path | Stack position |
+|-----------|------|----------------|
+| Main repo | `/workspaces/cca-swebench` | Bottom (scaffold) |
+| Chat worktree | `/workspaces/cca-chat` | Middle ([chat] commit) |
+| K8s worktree | `/workspaces/cca-k8s` | Top ([k8s] commit) |
 
-The `AnthropicBedrock` client uses your existing AWS credentials (env vars or `~/.aws/credentials`) — same as the current boto3 setup. No `ANTHROPIC_API_KEY` needed.
+## Step 2: Install dependency
 
----
+```bash
+cd /workspaces/cca-swebench
+.venv/bin/pip install "anthropic[bedrock]"
+# Add anthropic[bedrock] to requirements.txt
+```
 
-## Work Stream 1: Chat Agent (`claude_agents/chat/`)
+## Step 3: Open parallel sessions
 
-**Worktree:** `/workspaces/cca-chat`
+Open two VS Code terminals (click `+` in the terminal panel).
 
-### How to start
-
-Open a new terminal and launch a Claude Code session in the worktree:
-
+**Terminal 1 — Chat agent worktree:**
 ```bash
 cd /workspaces/cca-chat
 claude
 ```
 
-Then give Claude this prompt:
+Prompt:
+> Implement a simple chat agent under `claude_agents/chat/` using `AnthropicBedrock`
+> from the `anthropic` SDK (AWS Bedrock, region from `AWS_REGION` env var).
+> Simple REPL loop: read input → call Claude → print response. Maintain conversation
+> history. Support exit/Ctrl+C. Add `__main__.py` entry point.
+> Create unit tests in `my_agents/tests/unit/test_chat_agent.py` (mock the client)
+> and integration tests in `my_agents/tests/integration/test_chat_agent_integration.py`.
+> Do NOT commit when done — leave changes uncommitted.
 
-> Follow the "Work Stream 1: Chat Agent" section in `/workspaces/cca-swebench/claude_agents_plan.md`. Implement the chat agent under `claude_agents/chat/` and its tests. Use `AnthropicBedrock` from the `anthropic` SDK. Amend the current commit when done (`sl amend`).
-
-### Files to create
-
-#### `claude_agents/chat/agent.py`
-A simple interactive chat agent using `AnthropicBedrock`:
-- Initialize `AnthropicBedrock(aws_region=os.environ.get("AWS_REGION", "us-west-2"))`
-- Use `client.messages.create()` with `model="us.anthropic.claude-sonnet-4-5-20250929-v1:0"` (or appropriate Bedrock model ID)
-- Maintain conversation history as a list of messages
-- Loop: read user input → append to messages → call API → print response → append assistant message
-- Support `Ctrl+C` / "exit" to quit
-
-#### `claude_agents/chat/__main__.py`
-Entry point: `python -m claude_agents.chat` runs the chat loop.
-
-### Tests
-
-#### `my_agents/tests/unit/test_chat_agent.py`
-- Mock `AnthropicBedrock` client
-- Test conversation history management (messages alternate user/assistant)
-- Test exit condition
-
-#### `my_agents/tests/integration/test_chat_agent_integration.py`
-- Real Bedrock call with a simple prompt
-- Verify response structure
-
----
-
-## Work Stream 2: K8s Agent (`claude_agents/k8s/`)
-
-**Worktree:** `/workspaces/cca-k8s`
-
-### How to start
-
-Open another terminal and launch a Claude Code session in the worktree:
-
+**Terminal 2 — K8s agent worktree:**
 ```bash
 cd /workspaces/cca-k8s
 claude
 ```
 
-Then give Claude this prompt:
+Prompt:
+> Implement a K8s readonly agent under `claude_agents/k8s/` using `AnthropicBedrock`
+> from the `anthropic` SDK (AWS Bedrock, region from `AWS_REGION` env var).
+> Whitelist exactly 3 readonly kubectl commands as tools:
+> 1. `kubectl get <resource> [-n namespace]`
+> 2. `kubectl describe <resource> <name> [-n namespace]`
+> 3. `kubectl logs <pod> [-n namespace] [--tail N]`
+> Use `subprocess.run()` with `shell=False`. Validate inputs reject shell
+> metacharacters (`;`, `|`, `&&`, backticks, `$()`).
+> Use the manual agentic loop (while stop_reason == "tool_use").
+> Add `__main__.py` entry point.
+> Create unit tests in `my_agents/tests/unit/test_k8s_agent.py` (mock client + subprocess)
+> and integration tests in `my_agents/tests/integration/test_k8s_agent_integration.py`.
+> Do NOT commit when done — leave changes uncommitted.
 
-> Follow the "Work Stream 2: K8s Agent" section in `/workspaces/cca-swebench/claude_agents_plan.md`. Implement the k8s agent under `claude_agents/k8s/` and its tests. Use `AnthropicBedrock` from the `anthropic` SDK. Whitelist only kubectl get, describe, and logs. Amend the current commit when done (`sl amend`).
+---
 
-### Top 3 Readonly kubectl Commands (whitelisted)
+## Step 4: Commit with Sapling
 
-1. **`kubectl get`** — List resources (pods, services, deployments, nodes, etc.)
-2. **`kubectl describe`** — Show detailed info about a resource
-3. **`kubectl logs`** — View container logs
+> **Important:** With `git worktree` (unlike `sl wt`), `sl amend` does NOT
+> auto-restack children. You must manually rebase the k8s commit onto the
+> amended chat commit.
 
-### Files to create
+**4a. Chat agent (do this first — it's lower in the stack):**
+```bash
+cd /workspaces/cca-chat
+sl add .
+sl amend
+# Output shows: OLD_HASH -> NEW_HASH "[chat] WIP chat agent"
+# Note the NEW_HASH — you'll need it below.
+```
 
-#### `claude_agents/k8s/agent.py`
-An agent that answers K8s questions using whitelisted kubectl commands:
-- Initialize `AnthropicBedrock` client (same as chat agent)
-- Define 3 tools using the `@beta_tool` decorator or manual tool definitions:
-  - `kubectl_get(resource: str, namespace: str = "default", flags: str = "")` — runs `kubectl get <resource> -n <namespace> <flags>`
-  - `kubectl_describe(resource: str, name: str, namespace: str = "default")` — runs `kubectl describe <resource> <name> -n <namespace>`  
-  - `kubectl_logs(pod: str, namespace: str = "default", container: str = "", tail: int = 100)` — runs `kubectl logs <pod> -n <namespace> --tail=<tail>`
-- **Security**: Each tool function validates inputs against an allowlist (no shell injection via `;`, `|`, `&&`, backticks, `$()`) and runs via `subprocess.run()` with `shell=False`
-- Use the manual agentic loop (tool runner beta may not fully work with Bedrock):
-  ```python
-  while response.stop_reason == "tool_use":
-      # execute whitelisted tool → feed result back
-  ```
-- System prompt: "You are a Kubernetes assistant. Use the provided kubectl tools to answer questions. Only use the tools provided — do not suggest running other commands."
+**4b. Rebase k8s onto the amended chat commit:**
+```bash
+cd /workspaces/cca-swebench
+sl smartlog
+# You'll see a fork: new chat commit and k8s on separate branches.
+# Rebase k8s onto the new chat commit (use hashes from smartlog):
+sl rebase -s <K8S_HASH> -d <NEW_CHAT_HASH>
+sl smartlog                     # verify the stack is linear
+```
 
-#### `claude_agents/k8s/__main__.py`
+**4c. K8s agent:**
+```bash
+cd /workspaces/cca-k8s
+sl follow                       # follow to the restacked k8s commit
+sl add .
+sl amend
+sl smartlog                     # verify the final stack
+```
+
+**4d. Go to top of stack in main repo:**
+```bash
+cd /workspaces/cca-swebench
+sl next --top                   # now all code is visible in main working copy
+```
+
+> **Key command (from the blog post):**
+> - `sl follow` — in a worktree sitting on a stale commit,
+>   jump to the latest successor (carrying uncommitted changes)
+
+## Step 5: Clean up worktrees
+
+```bash
+git worktree remove ../cca-chat
+git worktree remove ../cca-k8s
+```
+
+---
+
+## Work Stream 1: Chat Agent Details
+
+### `claude_agents/chat/agent.py`
+- Initialize `AnthropicBedrock(aws_region=os.environ.get("AWS_REGION", "us-west-2"))`
+- Use `client.messages.create()` with appropriate Bedrock model ID
+- Maintain conversation history as a list of messages
+- Loop: read user input → append to messages → call API → print response → append assistant message
+- Support `Ctrl+C` / "exit" to quit
+
+### `claude_agents/chat/__main__.py`
+Entry point: `python -m claude_agents.chat`
+
+### Tests
+- `my_agents/tests/unit/test_chat_agent.py` — mock client, test history management
+- `my_agents/tests/integration/test_chat_agent_integration.py` — real Bedrock call
+
+---
+
+## Work Stream 2: K8s Agent Details
+
+### Whitelisted commands
+1. **`kubectl get`** — list resources (pods, services, deployments, nodes, etc.)
+2. **`kubectl describe`** — show detailed info about a resource
+3. **`kubectl logs`** — view container logs
+
+### `claude_agents/k8s/agent.py`
+- Initialize `AnthropicBedrock` client
+- Define 3 tools (manual JSON schema definitions):
+  - `kubectl_get(resource, namespace="default")`
+  - `kubectl_describe(resource, name, namespace="default")`
+  - `kubectl_logs(pod, namespace="default", container="", tail=100)`
+- Input validation: reject shell metacharacters
+- `subprocess.run(["kubectl", ...], shell=False, capture_output=True)`
+- Manual agentic loop until `stop_reason != "tool_use"`
+- System prompt: "You are a Kubernetes assistant. Use the provided kubectl tools to answer questions."
+
+### `claude_agents/k8s/__main__.py`
 Entry point: `python -m claude_agents.k8s`
 
 ### Tests
-
-#### `my_agents/tests/unit/test_k8s_agent.py`
-- Mock `AnthropicBedrock` client and `subprocess.run`
-- Test tool dispatch (correct kubectl command constructed)
-- Test input validation rejects shell metacharacters (`;`, `|`, `&&`, `` ` ``, `$()`)
-- Test that only the 3 whitelisted commands are available
-
-#### `my_agents/tests/integration/test_k8s_agent_integration.py`
-- Real Bedrock call with a question like "list all pods in default namespace"
-- Verify the agent calls the `kubectl_get` tool correctly
+- `my_agents/tests/unit/test_k8s_agent.py` — mock client + subprocess, test input validation
+- `my_agents/tests/integration/test_k8s_agent_integration.py` — real Bedrock call
 
 ---
 
 ## Verification
 
 ```bash
-# Run unit tests (no external deps)
+# Unit tests (no external deps)
 .venv/bin/python -m pytest my_agents/tests/unit/test_chat_agent.py -v
 .venv/bin/python -m pytest my_agents/tests/unit/test_k8s_agent.py -v
 
-# Run integration tests (needs AWS creds + Bedrock access)
+# Integration tests (needs AWS creds + Bedrock access)
 .venv/bin/python -m pytest my_agents/tests/integration/test_chat_agent_integration.py -v
 .venv/bin/python -m pytest my_agents/tests/integration/test_k8s_agent_integration.py -v
 
 # Manual smoke test
 .venv/bin/python -m claude_agents.chat
 .venv/bin/python -m claude_agents.k8s
-```
-
-## Merging the Stack
-
-After both worktrees are done:
-```bash
-# In main repo
-sl smartlog                    # verify the stack looks clean
-sl goto <top-of-stack>         # go to the k8s commit
-sl fold --from <scaffold>      # optionally fold into fewer commits
-# Then submit/push as needed
 ```
