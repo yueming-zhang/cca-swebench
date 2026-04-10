@@ -46,3 +46,28 @@ def test_multi_turn_conversation(capsys):
 
     assert "blue" in response.lower()
     assert len(agent.history) == 4
+
+
+@pytest.mark.integration
+@pytest.mark.timeout(180)
+def test_compaction_preserves_context(capsys):
+    """After compaction, the agent should still recall facts from summarized messages."""
+    agent = ChatAgent(
+        max_context_tokens=8000,
+        summary_threshold=0.5,
+        recent_messages_to_keep=4,
+    )
+
+    # Plant a fact early in the conversation
+    agent.chat("My favorite programming language is Rust. Just say OK.")
+
+    # Generate enough conversation to trigger compaction with low thresholds
+    for i in range(5):
+        agent.chat(f"Tell me a one-sentence fun fact about the number {i}.")
+
+    # Check if the early fact survived through compaction
+    response = agent.chat(
+        "What is my favorite programming language? Reply with just the language name."
+    )
+
+    assert "rust" in response.lower()
