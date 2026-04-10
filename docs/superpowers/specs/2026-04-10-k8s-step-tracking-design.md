@@ -5,7 +5,8 @@
 The K8s agent has no structured record of what happened during an agent run.
 This makes it difficult to evaluate model performance programmatically — e.g.,
 did the model pick the right subcommand, how many LLM round-trips did it take,
-what tool outputs did it see before producing its answer.
+what tool outputs did it see before producing its answer, and whether
+instruction-following quality degrades as context grows.
 
 ## Changes
 
@@ -18,13 +19,16 @@ Step types and their fields:
 
 | type             | fields                                          |
 |------------------|-------------------------------------------------|
-| `llm_request`    | `timestamp`                                     |
+| `llm_request`    | `timestamp`, `message_count`, `estimated_tokens` |
 | `tool_use`       | `timestamp`, `subcommand`, `args`               |
 | `tool_result`    | `timestamp`, `subcommand`, `args`, `output`     |
 | `tool_error`     | `timestamp`, `subcommand`, `args`, `error`      |
 | `llm_response`   | `timestamp`, `text`                             |
 
-- `llm_request` — logged before each `messages.create` call.
+- `llm_request` — logged before each `messages.create` call. Includes
+  `message_count` (number of messages in conversation) and `estimated_tokens`
+  (rough token estimate using ~4 chars per token heuristic) to track context
+  growth across the agent run.
 - `tool_use` — logged when the model decides to call kubectl.
 - `tool_result` — logged after successful execution with the output.
 - `tool_error` — logged when execution raises (validation, timeout, etc.).
@@ -45,6 +49,8 @@ Timestamps are ISO 8601 strings from `datetime.datetime.utcnow().isoformat()`.
 - New test: verify steps list contains expected types in correct order for a
   single tool-use loop (`llm_request`, `tool_use`, `tool_result`, `llm_request`,
   `llm_response`).
+- New test: verify `llm_request` steps contain `message_count` and
+  `estimated_tokens`, and that both grow across successive requests.
 - New test: verify `tool_error` step is recorded when execution fails.
 
 **Integration tests** (real Bedrock + kubectl):
