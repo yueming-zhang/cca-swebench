@@ -25,19 +25,23 @@ class TestK8sAgentIntegration:
     def test_agent_calls_kubectl_get_for_pod_question(self):
         """Real Bedrock call + real kubectl: ask about pods."""
         client = create_client()
-        result = run_agent(
+        result, steps = run_agent(
             "List all pods in the default namespace", client=client
         )
-        # Final response should be non-empty text
         assert len(result) > 0
+        assert len(steps) >= 2  # at least llm_request + llm_response
+        assert steps[0]["type"] == "llm_request"
+        assert steps[-1]["type"] == "llm_response"
 
     def test_agent_describes_node(self):
         """Real Bedrock call + real kubectl: ask to describe a node."""
         client = create_client()
-        result = run_agent(
+        result, steps = run_agent(
             "Describe any one node in the cluster", client=client
         )
         assert len(result) > 0
+        assert any(s["type"] == "tool_use" for s in steps)
+        assert any(s["type"] == "tool_result" for s in steps)
 
     def test_tool_definitions_single_kubectl(self):
         """Verify exactly one generic kubectl tool is defined."""

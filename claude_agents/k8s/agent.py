@@ -230,7 +230,7 @@ def main() -> None:
             break
 
         try:
-            response = run_agent(user_input, client=client)
+            response, _steps = run_agent(user_input, client=client)
             print(f"\nAssistant: {response}")
         except Exception as e:
             print(f"\nError: {e}", file=sys.stderr)
