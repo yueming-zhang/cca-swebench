@@ -69,5 +69,25 @@ class ChatAgent:
         )
         return response.content[0].text
 
+    def _maybe_compact_history(self) -> None:
+        """Compact history if token count exceeds the threshold."""
+        if len(self.history) <= self.recent_messages_to_keep:
+            return
+
+        token_count = self._count_history_tokens()
+        if token_count <= self.max_context_tokens * self.summary_threshold:
+            return
+
+        # Split: old messages to summarize, recent to keep verbatim
+        old_messages = self.history[: -self.recent_messages_to_keep]
+        recent_messages = self.history[-self.recent_messages_to_keep :]
+
+        summary = self._summarize_messages(old_messages)
+
+        self.history = [
+            {"role": "user", "content": f"[Conversation summary]: {summary}"},
+            {"role": "assistant", "content": "Understood, I'll keep this context in mind."},
+        ] + recent_messages
+
     def reset(self):
         self.history.clear()

@@ -261,3 +261,111 @@ def test_summarize_messages():
     assert call_kwargs["max_tokens"] == 1024
     assert any("summarize" in s.lower() for s in [call_kwargs["system"]])
     assert call_kwargs["messages"][0]["role"] == "user"
+
+
+def test_compact_history_triggers_when_over_threshold():
+    """_maybe_compact_history should summarize old messages when over token threshold."""
+    mock_client = MagicMock()
+    mock_client.messages.stream.return_value = FakeStreamContext(["r"])
+    agent = ChatAgent(
+        max_context_tokens=1000,
+        summary_threshold=0.5,
+        recent_messages_to_keep=4,
+        client=mock_client,
+    )
+
+    # Build history with 6 messages (3 turns) — more than recent_messages_to_keep (4)
+    agent.history = [
+        {"role": "user", "content": "msg1"},
+        {"role": "assistant", "content": "reply1"},
+        {"role": "user", "content": "msg2"},
+        {"role": "assistant", "content": "reply2"},
+        {"role": "user", "content": "msg3"},
+        {"role": "assistant", "content": "reply3"},
+    ]
+
+    # Token count above 50% of 1000
+    mock_client.messages.count_tokens.return_value = MagicMock(input_tokens=600)
+
+    # Summarization returns a summary
+    mock_response = MagicMock()
+    mock_text_block = MagicMock()
+    mock_text_block.text = "Summary of earlier conversation."
+    mock_response.content = [mock_text_block]
+    mock_client.messages.create.return_value = mock_response
+
+    agent._maybe_compact_history()
+
+    # History should now be: summary_user, summary_assistant, msg2, reply2, msg3, reply3
+    # Old messages (msg1, reply1) were summarized; last 4 messages kept verbatim
+    assert len(agent.history) == 6
+    assert "[Conversation summary]" in agent.history[0]["content"]
+    assert "Summary of earlier conversation." in agent.history[0]["content"]
+    assert agent.history[0]["role"] == "user"
+    assert agent.history[1]["role"] == "assistant"
+    assert agent.history[1]["content"] == "Understood, I'll keep this context in mind."
+    # Last 4 messages preserved
+    assert agent.history[2] == {"role": "user", "content": "msg2"}
+    assert agent.history[3] == {"role": "assistant", "content": "reply2"}
+    assert agent.history[4] == {"role": "user", "content": "msg3"}
+    assert agent.history[5] == {"role": "assistant", "content": "reply3"}
+
+
+def test_compact_history_skips_when_under_threshold():
+    """_maybe_compact_history should not compact when tokens are below threshold."""
+    mock_client = MagicMock()
+    mock_client.messages.stream.return_value = FakeStreamContext(["r"])
+    agent = ChatAgent(
+        max_context_tokens=1000,
+        summary_threshold=0.5,
+        recent_messages_to_keep=4,
+        client=mock_client,
+    )
+
+    agent.history = [
+        {"role": "user", "content": "msg1"},
+        {"role": "assistant", "content": "reply1"},
+        {"role": "user", "content": "msg2"},
+        {"role": "assistant", "content": "reply2"},
+        {"role": "user", "content": "msg3"},
+        {"role": "assistant", "content": "reply3"},
+    ]
+
+    # Token count below 50% of 1000
+    mock_client.messages.count_tokens.return_value = MagicMock(input_tokens=400)
+
+    agent._maybe_compact_history()
+
+    # History unchanged
+    assert len(agent.history) == 6
+    assert agent.history[0] == {"role": "user", "content": "msg1"}
+    mock_client.messages.create.assert_not_called()
+
+
+def test_compact_history_skips_when_too_few_messages():
+    """_maybe_compact_history should not compact when history <= recent_messages_to_keep."""
+    mock_client = MagicMock()
+    mock_client.messages.stream.return_value = FakeStreamContext(["r"])
+    agent = ChatAgent(
+        max_context_tokens=1000,
+        summary_threshold=0.5,
+        recent_messages_to_keep=20,
+        client=mock_client,
+    )
+
+    # Only 4 messages — well under the 20 threshold
+    agent.history = [
+        {"role": "user", "content": "msg1"},
+        {"role": "assistant", "content": "reply1"},
+        {"role": "user", "content": "msg2"},
+        {"role": "assistant", "content": "reply2"},
+    ]
+
+    # Even with high token count, should not compact
+    mock_client.messages.count_tokens.return_value = MagicMock(input_tokens=600)
+
+    agent._maybe_compact_history()
+
+    # History unchanged — no compaction when <= recent_messages_to_keep
+    assert len(agent.history) == 4
+    mock_client.messages.create.assert_not_called()
