@@ -16,7 +16,12 @@
       "Bash(sl version:*)",
       "Bash(sl smartlog:*)",
       "Bash(/workspaces/cca-chat/.venv/bin/python:*)",
-      "Bash(python3 -m pytest my_agents/tests/unit/test_k8s_agent.py -v)"
+      "Bash(python3 -m pytest my_agents/tests/unit/test_k8s_agent.py -v)",
+      "Bash(kubectl version:*)",
+      "Bash(getent hosts:*)",
+      "Read(//etc/**)",
+      "Bash(ping -c1 -W1 host.docker.internal)",
+      "Bash(curl:*)"
     ]
   }
 }

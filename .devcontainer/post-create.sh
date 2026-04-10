@@ -32,6 +32,12 @@ rm -f eksctl_Linux_${ARCH}.tar.gz
 curl -fsSL https://claude.ai/install.sh | bash
 echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
 
+# Patch kubeconfig for Docker Desktop K8s access from inside container
+# kubernetes.docker.internal resolves to the host AND is in the API server's TLS cert SANs
+if [ -f /home/vscode/.kube/config ]; then
+  sed -i 's|https://127\.0\.0\.1:6443|https://kubernetes.docker.internal:6443|g' /home/vscode/.kube/config
+fi
+
 
 ### 1. Create EKS
 # eksctl create cluster \
